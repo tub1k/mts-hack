@@ -1,8 +1,8 @@
 import time
 from openai import OpenAI
 import config
-from prompts import SYSTEM_PROMPT
-from rag import KnowledgeBaseRAG
+from legacy.prompts import SYSTEM_PROMPT
+from legacy.rag import KnowledgeBaseRAG
 
 class ConsultantAgent:
     def __init__(self, rag: KnowledgeBaseRAG):

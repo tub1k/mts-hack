@@ -1,24 +1,38 @@
 ### Структура папок
 
 ```
-mts-energytool-bot/
-├── config.py            # Чтение всех переменных окружения с фоллбэками по регламенту
-├── prompts.py           # Системные промпты консультанта (до 150 слов, сбор заявки)
-├── rag.py               # Распаковка knowledge-base.zip, чанкинг, FAISS + BM25 + Reranker
-├── agent.py             # Клиент к локальному прокси (OpenAI API) с ретраями от 429/5xx
-├── solution.py          # Точка входа Этапа 1: читает questions.csv -> пишет submission.csv
-├── app.py               # Точка входа Этапа 2: FastAPI-сервер + SQLite + выдача фронтенда
-├── make_submit.py       # Скрипт упаковки плоского ZIP-сабмита для лидерборда
-├── static/
-│   └── index.html       # Веб-чат с кнопкой «Новый диалог» и панелью режима отладки
-├── data/                # В .gitignore! Локальная папка для questions.csv и knowledge-base.zip
-├── requirements.txt     # Фиксированный список пакетов из регламента
-├── .env.example         # Шаблон переменных окружения без секретов
-├── .gitignore
-├── .dockerignore
-├── Dockerfile
-├── compose.yaml
-└── README.mdmts-energytool-bot/
+mts-energytool/
+│
+├── solution.py          → ZIP   точка входа: questions.csv → submission.csv
+├── config.py            → ZIP   env/.env, пути, бюджеты
+├── llm.py               → ZIP   HTTP-клиент: chat / embeddings / rerank
+├── kb.py                → ZIP   чтение базы, нарезка по секциям, блоки правил
+├── dialog.py            → ZIP   история диалога, факты о клиенте, маршрут темы
+├── retrieval.py         → ZIP   BM25 + эмбеддинги + RRF + реранкер, сборка контекста
+├── policy.py            → ZIP   промпт, эталонные примеры, постобработка
+├── guard.py             → ZIP   проверка фактов и формы, починка
+├── requirements.txt     → ZIP   4 зависимости
+│
+├── make_submit.py       локально: сборка архива + валидация CSV
+├── .env                 локально: Ollama (в ZIP НЕ кладём!)
+├── .gitignore           локально
+│
+├── data/                локально; платформа подкладывает эти файлы сама
+│   ├── questions.csv        твой урезанный на 1 вопрос
+│   ├── knowledge-base.zip   исходный архив с 3 папками, распаковывать не нужно
+│   └── demo_output.csv      эталон для сверки, кодом не читается
+│
+├── legacy/              старые файлы, чтобы не мешали импортам
+│   ├── rag.py
+│   ├── agent.py
+│   ├── prompts.py
+│   ├── app.py               понадобится на этапе 2
+│   └── solution_old.py
+│
+├── submission.csv       создаётся при прогоне
+├── submit.zip           создаётся make_submit.py
+├── __pycache__/
+└── venv/
 ```
 
 ### Среда разработки

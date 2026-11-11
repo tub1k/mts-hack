@@ -2,8 +2,8 @@ import uuid
 from fastapi import FastAPI
 from pydantic import BaseModel
 import config
-from rag import KnowledgeBaseRAG
-from agent import ConsultantAgent
+from legacy.rag import KnowledgeBaseRAG
+from legacy.agent import ConsultantAgent
 
 app = FastAPI(title="MTS Energytool AI Consultant")
 
