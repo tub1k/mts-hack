@@ -32,7 +32,7 @@ SUBMISSION_CSV_PATH = "submission.csv"
 
 # Параметры генерации и поиска
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.2"))
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", "8192"))
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "4"))
 TOP_K = int(os.getenv("TOP_K", "10"))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "4"))
