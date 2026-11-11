@@ -36,3 +36,10 @@ MAX_TOKENS = int(os.getenv("MAX_TOKENS", "8192"))
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "4"))
 TOP_K = int(os.getenv("TOP_K", "10"))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "4"))
+
+CHUNK_SIZE = 900
+CHUNK_OVERLAP = 200
+TOP_K = 16            
+RERANKER_TOP_N = 5    
+TEMPERATURE = 0.05    
+MAX_TOKENS = 1024     
