@@ -1,93 +1,97 @@
-"""Конфигурация. На платформе значения приходят из окружения, локально — из .env."""
+"""Runtime settings for the MTS Energytool challenge.
+
+Only Python modules and requirements.txt are shipped. All data and credentials
+come from the platform environment at runtime.
+"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv(override=False)  # окружение платформы всегда важнее .env
-except Exception:
-    pass
+import time
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def env(name: str, default: str = "") -> str:
-    value = os.getenv(name, "")
+    value = os.environ.get(name, "")
     value = value.strip() if isinstance(value, str) else ""
-    if not value or value == name:  # платформа иногда передаёт литерал-заглушку
-        return default
-    return value
+    return default if not value or value == name else value
 
 
-def env_num(name, default, lo, hi, cast=int):
+def number(name: str, default, low, high, cast=int):
     try:
-        return max(lo, min(hi, cast(float(env(name, str(default))))))
-    except (TypeError, ValueError):
+        result = cast(float(env(name, str(default))))
+        return max(low, min(high, result))
+    except (ValueError, OverflowError, TypeError):
         return default
 
 
-# --- доступ к API ---
-BASE_URL = (env("LLM_BASE_URL") or env("BASE_URL") or env("OPENAI_BASE_URL")).rstrip("/")
+BASE_URL = (env("LLM_BASE_URL") or env("OPENAI_BASE_URL") or env("BASE_URL")).rstrip("/")
 API_KEY = env("LLM_API_KEY") or env("OPENAI_API_KEY") or "local-key"
-EMB_KEY = env("EMBEDDER_API_KEY") or API_KEY
-RERANK_KEY = env("RERANKER_API_KEY") or API_KEY
+LLM_MODEL = env("LLM_MODEL") or env("OPENAI_MODEL") or env("GEN_MODEL")
+EMB_MODEL = env("EMB_MODEL", "BAAI/bge-m3")
+RERANKER_MODEL = env("RERANKER_MODEL", "Qwen3-Reranker-8B")
 
-LLM_MODEL = env("LLM_MODEL") or env("GEN_MODEL") or env("OPENAI_MODEL")
-EMB_MODEL = env("EMB_MODEL", "baai/bge-m3")
-RERANKER_MODEL = env("RERANKER_MODEL", "qwen/qwen3-reranker-8b")
-
-# --- данные ---
 DATA_DIR = Path(env("DATA_DIR", "data"))
 QUESTIONS_FILE = env("QUESTIONS_FILE")
 KB_FILE = env("KB_FILE")
 OUT_FILE = env("OUT_FILE", "submission.csv")
 
-# --- бюджеты ---
-TOTAL_BUDGET_SEC = env_num("TOTAL_BUDGET_SEC", 1020, 120, 1140)
-CHAT_TIMEOUT = env_num("CHAT_TIMEOUT", 150, 20, 400)
-EMB_TIMEOUT = env_num("EMB_TIMEOUT", 90, 15, 300)
-INDEX_BUDGET_SEC = env_num("INDEX_BUDGET_SEC", 240, 30, 600)
+# The platform kills a run after 20 minutes; reserve at least 60s for flushing.
+TOTAL_BUDGET_SEC = number("TOTAL_BUDGET_SEC", 1080, 120, 1140)
+CHAT_TIMEOUT = number("CHAT_TIMEOUT", 85, 15, 240)
+EMB_TIMEOUT = number("EMB_TIMEOUT", 55, 10, 150)
+RERANK_TIMEOUT = number("RERANK_TIMEOUT", 35, 10, 90)
+INDEX_BUDGET_SEC = number("INDEX_BUDGET_SEC", 130, 10, 300)
+MAX_WORKERS = number("MAX_WORKERS", 4, 1, 8)
+MAX_TOKENS = number("MAX_TOKENS", 1300, 512, 4096)
+TEMPERATURE = number("TEMPERATURE", 0.0, 0.0, 0.7, float)
 
-MAX_WORKERS = env_num("MAX_WORKERS", 4, 1, 8)
-MAX_TOKENS = env_num("MAX_TOKENS", 2048, 512, 8192)
-TEMPERATURE = env_num("TEMPERATURE", 0.0, 0.0, 0.4, float)
+# Retrieval budgets are in characters, not tokens.
+CHUNK_CHARS = number("CHUNK_CHARS", 1150, 550, 2200)
+CONTEXT_CHARS = number("CONTEXT_CHARS", 13700, 6000, 25000)
+TOP_K = number("TOP_K", 9, 5, 24)
+RERANK_CANDIDATES = number("RERANK_CANDIDATES", 18, 8, 32)
+RERANKER_TOP_N = number("RERANKER_TOP_N", 12, 4, 24)
+EMBED_MAX_CHUNKS = number("EMBED_MAX_CHUNKS", 850, 150, 2000)
+USE_EMBEDDINGS = env("USE_EMBEDDINGS", "1").lower() not in ("0", "false", "no")
+USE_RERANKER = env("USE_RERANKER", "1").lower() not in ("0", "false", "no")
+USE_REPAIR = env("USE_REPAIR", "1").lower() not in ("0", "false", "no")
 
-# --- поиск ---
-CONTEXT_CHARS = env_num("CONTEXT_CHARS", 22000, 4000, 60000)
-CHUNK_CHARS = env_num("CHUNK_CHARS", 1000, 300, 2500)
-TOP_DOCS = env_num("TOP_DOCS", 3, 1, 6)
-RERANK_CANDIDATES = env_num("RERANK_CANDIDATES", 24, 4, 60)
-USE_EMBEDDINGS = env("USE_EMBEDDINGS", "1") != "0"
-USE_RERANKER = env("USE_RERANKER", "1") != "0"
-USE_REPAIR = env("USE_REPAIR", "1") != "0"
+# Assigned in solution.main(); module-level default also supports local tests.
+DEADLINE = float("inf")
 
-# --- стиль ---
-TARGET_WORDS = env_num("TARGET_WORDS", 80, 30, 140)
-HARD_WORDS = env_num("HARD_WORDS", 110, 50, 150)
 
-DEADLINE = float("inf")  # выставляется в solution.main()
+def remaining() -> float:
+    return DEADLINE - time.monotonic()
+
+
+def candidate_paths(*names: str):
+    roots = [DATA_DIR, SCRIPT_DIR / DATA_DIR, Path.cwd(), SCRIPT_DIR]
+    for name in names:
+        if not name:
+            continue
+        p = Path(name).expanduser()
+        if p.is_absolute():
+            yield p
+        else:
+            for root in roots:
+                yield root / p
 
 
 def find_file(*names: str) -> Path | None:
-    roots = [DATA_DIR, SCRIPT_DIR / DATA_DIR, Path.cwd(), SCRIPT_DIR]
-    for root in roots:
-        for name in names:
-            if not name:
-                continue
-            p = Path(name)
-            cand = p if p.is_absolute() else root / p
-            if cand.is_file():
-                return cand
+    seen = set()
+    for path in candidate_paths(*names):
+        if str(path) in seen:
+            continue
+        seen.add(str(path))
+        if path.is_file():
+            return path
     return None
 
 
 def find_dir(*names: str) -> Path | None:
-    roots = [DATA_DIR, SCRIPT_DIR / DATA_DIR, Path.cwd(), SCRIPT_DIR]
-    for root in roots:
-        for name in names:
-            cand = root / name
-            if cand.is_dir() and any(cand.rglob("*.md")):
-                return cand
+    for path in candidate_paths(*names):
+        if path.is_dir():
+            return path
     return None
