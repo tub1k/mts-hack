@@ -12,6 +12,36 @@ import time
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
+def _load_local_dotenv() -> None:
+    """Read a local .env without extra dependencies; never override judge env vars."""
+    for filepath in (SCRIPT_DIR / ".env", Path.cwd() / ".env"):
+        try:
+            lines = filepath.read_text(encoding="utf-8-sig").splitlines()
+        except (OSError, UnicodeError):
+            continue
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].lstrip()
+            name, separator, value = line.partition("=")
+            name = name.strip()
+            if not separator or not name.isidentifier():
+                continue
+            value = value.strip()
+            if value.startswith(("\"", "'")):
+                quote = value[0]
+                closing = value.find(quote, 1)
+                value = value[1:closing] if closing >= 0 else value[1:]
+            else:
+                value = value.split(" #", 1)[0].strip()
+            os.environ.setdefault(name, value)
+
+
+_load_local_dotenv()
+
+
 def env(name: str, default: str = "") -> str:
     value = os.environ.get(name, "")
     value = value.strip() if isinstance(value, str) else ""
@@ -55,7 +85,7 @@ RERANK_CANDIDATES = number("RERANK_CANDIDATES", 18, 8, 32)
 RERANKER_TOP_N = number("RERANKER_TOP_N", 12, 4, 24)
 EMBED_MAX_CHUNKS = number("EMBED_MAX_CHUNKS", 850, 150, 2000)
 USE_EMBEDDINGS = env("USE_EMBEDDINGS", "1").lower() not in ("0", "false", "no")
-USE_RERANKER = env("USE_RERANKER", "1").lower() not in ("0", "false", "no")
+USE_RERANKER = (env("USE_RERANKER") or env("USE_RERAINKER", "1")).lower() not in ("0", "false", "no")
 USE_REPAIR = env("USE_REPAIR", "1").lower() not in ("0", "false", "no")
 
 # Assigned in solution.main(); module-level default also supports local tests.

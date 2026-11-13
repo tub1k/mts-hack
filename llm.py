@@ -7,6 +7,7 @@ import re
 import threading
 import time
 from urllib import error, request
+from urllib.parse import urlsplit
 
 import config
 
@@ -38,7 +39,7 @@ def _time_budget(requested: int) -> float:
 def post(endpoint: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
     if not config.BASE_URL:
         raise ApiError("LLM_BASE_URL / OPENAI_BASE_URL не задан")
-    url = config.BASE_URL + endpoint
+    url = endpoint if endpoint.startswith(("http://", "https://")) else config.BASE_URL + endpoint
     headers = {
         "Authorization": "Bearer " + config.API_KEY,
         "Content-Type": "application/json",
@@ -78,6 +79,35 @@ def post(endpoint: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
     raise last or ApiError("API недоступно")
 
 
+def _is_local_ollama() -> bool:
+    """Detect Ollama localhost. The platform's OpenAI proxy is unaffected."""
+    try:
+        address = urlsplit(config.BASE_URL)
+        return address.hostname in ("localhost", "127.0.0.1", "::1") and address.port == 11434
+    except ValueError:
+        return False
+
+
+def _ollama_chat(messages: list[dict], tokens: int) -> str:
+    """Use native Ollama chat to reliably suppress costly thinking on Qwen3.5."""
+    base = config.BASE_URL.removesuffix("/v1").rstrip("/")
+    payload = {
+        "model": config.LLM_MODEL,
+        "messages": messages,
+        "stream": False,
+        "think": False,
+        "options": {"temperature": config.TEMPERATURE, "num_predict": min(tokens, 1024)},
+    }
+    # Local CPU/GPU can take longer to load and process a context than the judge.
+    # One sufficiently long request prevents multiple costly timeout retries.
+    result = post(base + "/api/chat", payload, max(240, config.CHAT_TIMEOUT), attempts=1)
+    message = result.get("message") or {}
+    answer = _clean(_content(message.get("content"))) if isinstance(message, dict) else ""
+    if not answer:
+        raise ApiError("Ollama /api/chat вернула пустой ответ")
+    return answer
+
+
 def _content(value) -> str:
     if isinstance(value, str):
         return value
@@ -101,6 +131,8 @@ def chat(messages: list[dict], max_tokens: int | None = None) -> str:
     if not config.LLM_MODEL:
         raise ApiError("Не задан LLM_MODEL / OPENAI_MODEL / GEN_MODEL")
     tokens = max_tokens or config.MAX_TOKENS
+    if _is_local_ollama():
+        return _ollama_chat(messages, tokens)
     with _state_lock:
         use_thinking_flag = _state["thinking_flag"]
     last = None
